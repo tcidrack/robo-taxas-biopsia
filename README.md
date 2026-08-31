@@ -110,6 +110,12 @@ Conferir depois do build, como no resto da frota:
 - `grep -a _create_unverified_context dist/Taxas_Biopsia.exe` → **não** pode responder. Se a
   verificação TLS falhar, o lançador cai no cache; nunca baixa código por canal inseguro.
 
+Conferir o repositório de origem exige outro método: `OWNER`/`REPO` são literais do `.pyc` do
+lançador, que vai **comprimido em zlib** dentro do PKG — `grep -a` no `.exe` não alcança e responde
+`0` mesmo quando o nome está certo. Um build apontando para o repositório errado dá 404 em toda a
+frota, então vale conferir descomprimindo os streams do PKG e procurando `robo-taxas-biopsia`
+neles.
+
 ## Layout de `#taxas_table`
 
 Confirmado em 28/08/2026 pelo log de produção (processo `2600031605`):

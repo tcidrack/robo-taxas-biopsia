@@ -7,6 +7,7 @@ _secrets.py
 build/
 dist/
 *.exe
+*.spec
 __pycache__/
 *.pyc
 
