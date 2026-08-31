@@ -100,12 +100,19 @@ Requer `truststore` instalado (`pip install truststore`). **Sem ele o `.exe` nã
 certificado em rede corporativa que intercepta HTTPS**: o download do GitHub falha sempre e a
 máquina congela na versão que estiver em cache.
 
+O build sai do `Taxas_Biopsia.spec`, que é **versionado**: ele carrega os `collect_all`, o nome do
+`.exe` e o `console=False`. Não builde pela linha de comando — sem a receita versionada o build não
+se reproduz em outra máquina.
+
 ```
-python -m PyInstaller --onefile --name Taxas_Biopsia --collect-all selenium --hidden-import truststore lancador_Taxas_Biopsia.py --noconfirm
+python -m PyInstaller Taxas_Biopsia.spec --noconfirm
 ```
 
 Conferir depois do build, como no resto da frota:
 
+- `grep -o "console=[A-Za-z]*" Taxas_Biopsia.spec` → tem que dar `console=False`. Toda a frota é
+  windowed: o usuário não pode ver janela preta, e é por isso que o diagnóstico do lançador vai
+  para `logs/lancador.log` (o `registrar()`) em vez de `print`;
 - `grep -a truststore dist/Taxas_Biopsia.exe` → tem que responder;
 - `grep -a _create_unverified_context dist/Taxas_Biopsia.exe` → **não** pode responder. Se a
   verificação TLS falhar, o lançador cai no cache; nunca baixa código por canal inseguro.

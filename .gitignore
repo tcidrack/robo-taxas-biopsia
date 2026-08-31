@@ -4,10 +4,12 @@ config.ini
 _secrets.py
 
 # Artefatos de build (descartaveis / pesados)
+# O .spec NAO entra aqui - ele e ENTRADA (a receita do build: collect_all, nome
+# do .exe, console=False) e precisa ser versionado, senao o .exe nao se reproduz
+# em outra maquina. build/ e dist/ sao SAIDA.
 build/
 dist/
 *.exe
-*.spec
 __pycache__/
 *.pyc
 
