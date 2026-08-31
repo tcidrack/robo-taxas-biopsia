@@ -1,0 +1,18 @@
+# Segredos / credenciais — NUNCA versionar
+acesso.xlsx
+config.ini
+_secrets.py
+
+# Artefatos de build (descartaveis / pesados)
+build/
+dist/
+*.exe
+__pycache__/
+*.pyc
+
+# Dados de execucao
+logs/
+relatorios/
+
+# Jupyter
+.ipynb_checkpoints/

@@ -1,0 +1,9 @@
+; Modelo de configuracao do lancador Taxas_Biopsia.
+; Copie este arquivo para "config.ini" (na mesma pasta do Taxas_Biopsia.exe)
+; e preencha o token real. NUNCA versione o config.ini com o token preenchido.
+
+[github]
+; Token fine-grained do GitHub, com permissao Contents: Read-only,
+; restrito apenas ao repositorio tcidrack/robo-taxas-biopsia, validade longa.
+; Ao expirar, basta atualizar este token (sem rebuildar o .exe).
+token = COLE_AQUI_O_TOKEN_FINE_GRAINED
