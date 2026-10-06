@@ -75,9 +75,9 @@ SELETORES_BOTAO_SALVAR = [
 # usuario, qual codigo aquela maquina executou.
 VERSAO = "2026-08-28 colunas taxas corrigidas"
 
-# Tela de login do SISWEB. Em 07/2026 o ISSEC moveu o login de
-# /sisweb/principal/index.php (hoje devolve HTTP 500) para /sisweb/login/index.php.
-URL_LOGIN = "http://autoriza.issec.ce.gov.br/sisweb/login/index.php"
+# Entrada do SISWEB: /sisweb/ redireciona para a tela de login atual. Sem sessao,
+# /sisweb/principal/index.php devolve HTTP 500 ("Pagina nao encontrada").
+URL_LOGIN = "http://autoriza.issec.ce.gov.br/sisweb/"
 
 CAMINHO_RAIZ = os.getcwd()
 
@@ -154,14 +154,26 @@ SUPABASE_APIKEY = getattr(_SECRETS, "SUPABASE_APIKEY", "") or "eyJhbGciOiJIUzI1N
 options = Options()
 options.add_argument("--start-maximized")
 
-# O Chrome 150 promove HTTP para HTTPS por conta propria. O SISWEB serve HTTP
-# puro (200, sem redirecionamento e sem HSTS) e o modulo dentro do iframe
-# referencia CSS/JS por http://; sob HTTPS o navegador bloqueia tudo como Mixed
-# Content e a tela chega quebrada ao robo. Medido: 40 bloqueios sem esta flag,
-# zero com ela.
+# O SISWEB atende http e https, mas a Capa de Processo (CodeIgniter, dentro do
+# iframe) referencia CSS/JS por http:// e monta os AJAX POST de
+# load_content_view() sobre JS_BASE_URL = 'http://...'. Se o Chrome promover a
+# pagina para https, o CSS/JS vira Mixed Content e os POST falham ("Erro, ao
+# carregar permissoes!", capa vazia). Por isso:
+# - a flag impede o Chrome de promover HTTP para HTTPS por conta propria;
+# - se ainda assim cair em https (ex.: ISSEC forcar 301, como em 05/10/2026),
+#   o Mixed Content e liberado e o script abaixo alinha JS_BASE_URL ao
+#   protocolo da pagina antes dela usa-lo. Em http ele nao altera nada.
 options.add_argument(
     "--disable-features=HttpsUpgrades,HttpsFirstBalancedMode,HttpsFirstModeV2"
 )
+options.add_argument("--allow-running-insecure-content")
+
+SCRIPT_JS_BASE_URL_HTTPS = """
+(function () { var v; try { Object.defineProperty(window, 'JS_BASE_URL', {
+  get: function () { return v; },
+  set: function (x) { v = (typeof x === 'string') ? x.replace(/^https?:/, location.protocol) : x; },
+  configurable: false }); } catch (e) {} })();
+"""
 
 
 def iniciar_navegador(max_tentativas=3):
@@ -170,6 +182,10 @@ def iniciar_navegador(max_tentativas=3):
         try:
             logging.info(f"Iniciando Chrome - tentativa {tentativa}/{max_tentativas}")
             nav = webdriver.Chrome(options=options)
+            nav.execute_cdp_cmd(
+                "Page.addScriptToEvaluateOnNewDocument",
+                {"source": SCRIPT_JS_BASE_URL_HTTPS},
+            )
             logging.info("Chrome iniciado com sucesso")
             return nav
         except Exception as e:
