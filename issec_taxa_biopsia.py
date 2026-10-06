@@ -10,6 +10,7 @@ import tkinter as tk
 from tkinter import simpledialog, messagebox
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.firefox.options import Options as FirefoxOptions
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
@@ -73,7 +74,7 @@ SELETORES_BOTAO_SALVAR = [
 
 # Bumpar a cada versao publicada: e o unico jeito de saber, olhando um log de
 # usuario, qual codigo aquela maquina executou.
-VERSAO = "2026-08-28 colunas taxas corrigidas"
+VERSAO = "2026-10-06 firefox-reserva"
 
 # Entrada do SISWEB: /sisweb/ redireciona para a tela de login atual. Sem sessao,
 # /sisweb/principal/index.php devolve HTTP 500 ("Pagina nao encontrada").
@@ -176,7 +177,7 @@ SCRIPT_JS_BASE_URL_HTTPS = """
 """
 
 
-def iniciar_navegador(max_tentativas=3):
+def _iniciar_chrome(max_tentativas=3):
     ultimo_erro = None
     for tentativa in range(1, max_tentativas + 1):
         try:
@@ -196,6 +197,51 @@ def iniciar_navegador(max_tentativas=3):
         f"Não foi possível iniciar o Chrome após {max_tentativas} tentativas: {ultimo_erro}"
     )
     raise ultimo_erro
+
+
+def _abrir_firefox():
+    # O Firefox também tem HTTPS-First; desligado para o SISWEB ficar em http.
+    opcoes = FirefoxOptions()
+    opcoes.set_preference("dom.security.https_only_mode", False)
+    opcoes.set_preference("dom.security.https_first", False)
+    opcoes.set_preference("dom.security.https_first_schemeless", False)
+    nav = webdriver.Firefox(options=opcoes)
+    nav.maximize_window()
+    return nav
+
+
+def iniciar_navegador():
+    """Abre o Chrome na tela de login; se ele não subir ou cair em https (onde a Capa
+    de Processo quebra por mixed content), usa o Firefox em http como reserva.
+    ROBO_NAVEGADOR=firefox na máquina pula direto para o Firefox."""
+    erro_chrome = None
+    if os.environ.get("ROBO_NAVEGADOR", "").strip().lower() != "firefox":
+        nav = None
+        try:
+            nav = _iniciar_chrome()
+            nav.get(URL_LOGIN)
+            if not nav.current_url.lower().startswith("https://"):
+                return nav
+            logging.warning(f"Chrome abriu em https ({nav.current_url}); usando o Firefox em http")
+        except Exception as e:
+            erro_chrome = e
+            logging.warning(f"Chrome falhou ({e}); usando o Firefox em http")
+        if nav is not None:
+            try:
+                nav.quit()
+            except Exception:
+                pass
+
+    try:
+        nav = _abrir_firefox()
+        nav.get(URL_LOGIN)
+        logging.info(f"Navegador: Firefox ({nav.current_url})")
+        return nav
+    except Exception:
+        logging.exception("Firefox também falhou")
+        if erro_chrome is not None:
+            raise erro_chrome
+        raise
 
 
 navegador = iniciar_navegador()
