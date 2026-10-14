@@ -19,6 +19,8 @@ from selenium.common.exceptions import (
     TimeoutException,
     InvalidSessionIdException,
     NoSuchWindowException,
+    UnexpectedAlertPresentException,
+    WebDriverException,
 )
 
 
@@ -74,7 +76,10 @@ SELETORES_BOTAO_SALVAR = [
 
 # Bumpar a cada versao publicada: e o unico jeito de saber, olhando um log de
 # usuario, qual codigo aquela maquina executou.
-VERSAO = "2026-10-06 firefox-reserva"
+VERSAO = "2026-10-14 captcha"
+
+# Tempo para o usuario digitar o captcha do login e clicar em Entrar.
+LOGIN_CAPTCHA_TIMEOUT = 300
 
 # Entrada do SISWEB: /sisweb/ redireciona para a tela de login atual. Sem sessao,
 # /sisweb/principal/index.php devolve HTTP 500 ("Pagina nao encontrada").
@@ -280,9 +285,72 @@ def fazer_login():
         )
         raise
 
-    campo_login.send_keys(usuario_sistema)
-    navegador.find_element(By.ID, "senha").send_keys(senha_sistema, Keys.ENTER)
-    logging.info("Login enviado")
+    if not navegador.find_elements(By.ID, "captcha_code"):
+        campo_login.send_keys(usuario_sistema)
+        navegador.find_element(By.ID, "senha").send_keys(senha_sistema, Keys.ENTER)
+        logging.info("Login enviado")
+        return
+    _aguardar_login_captcha()
+
+
+def _login_concluido():
+    """Saiu da tela de login e o menu apareceu."""
+    if navegador.find_elements(By.ID, "senha"):
+        return False
+    return bool(navegador.find_elements(By.CSS_SELECTOR, "a.pasta")
+                or navegador.find_elements(By.XPATH, "//a[contains(., 'Contas Médicas')]"))
+
+
+def _preencher_credenciais():
+    """Preenche usuario/senha (de novo, se a tela recarregou apos captcha
+    errado) e poe o foco no campo do captcha."""
+    campo_login = navegador.find_element(By.ID, "login")
+    campo_senha = navegador.find_element(By.ID, "senha")
+    # o campo de login converte o texto para maiusculas (onkeyup)
+    if (campo_login.get_attribute("value") or "").upper() != str(usuario_sistema).upper():
+        campo_login.clear()
+        campo_login.send_keys(usuario_sistema)
+    if not campo_senha.get_attribute("value"):
+        campo_senha.send_keys(senha_sistema)
+        captcha = navegador.find_elements(By.ID, "captcha_code")
+        if captcha:
+            captcha[0].click()
+
+
+def _aguardar_login_captcha():
+    """Desde 10/2026 o SISWEB pede captcha no login: o robo preenche usuario e
+    senha e espera a pessoa digitar as 5 letras e clicar em Entrar."""
+    logging.info("SISWEB pediu captcha - aguardando o usuario digitar e entrar")
+    _preencher_credenciais()
+    messagebox.showinfo(
+        "Taxas Biópsia",
+        "O SISWEB pediu a verificação (captcha).\n\n"
+        "Na janela do navegador, digite as 5 letras e clique em Entrar.\n"
+        f"Você tem {LOGIN_CAPTCHA_TIMEOUT // 60} minutos. Clique em OK para continuar."
+    )
+    limite = time.time() + LOGIN_CAPTCHA_TIMEOUT
+    while time.time() < limite:
+        try:
+            if _login_concluido():
+                logging.info("Login com captcha concluido")
+                return
+            if navegador.find_elements(By.ID, "login"):
+                _preencher_credenciais()
+        except UnexpectedAlertPresentException:
+            pass  # alert do SISWEB aberto (ex.: captcha errado)
+        except (NoSuchWindowException, InvalidSessionIdException):
+            logging.error("Janela fechada durante o login com captcha")
+            raise
+        except WebDriverException:
+            pass  # pagina trocando no meio da leitura
+        time.sleep(1)
+    logging.error(f"Tempo esgotado esperando o captcha - {_estado_navegador()}")
+    messagebox.showerror(
+        "Taxas Biópsia",
+        "Tempo esgotado esperando o login no SISWEB (captcha).\n"
+        "Rode o robô de novo."
+    )
+    raise TimeoutException("Tempo esgotado esperando o captcha do SISWEB")
 
 
 fazer_login()
