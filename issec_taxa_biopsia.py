@@ -76,7 +76,7 @@ SELETORES_BOTAO_SALVAR = [
 
 # Bumpar a cada versao publicada: e o unico jeito de saber, olhando um log de
 # usuario, qual codigo aquela maquina executou.
-VERSAO = "2026-10-14 captcha-aviso"
+VERSAO = "2026-11-06 apito-captcha"
 
 
 # Entrada do SISWEB: /sisweb/ redireciona para a tela de login atual. Sem sessao,
@@ -274,6 +274,12 @@ def _estado_navegador():
 # deixaria o robo parado mesmo depois do login.
 LOGIN_CAPTCHA_TIMEOUT = 300
 
+# A cada quantos segundos o apito se repete enquanto ninguem digita o captcha.
+LOGIN_CAPTCHA_APITO = 60
+
+# MB_ICONEXCLAMATION
+_SOM_RESERVA = 0x30
+
 _AVISO_CAPTCHA_JS = """
 var d = document.getElementById('aviso_robo_captcha');
 if (!d) {
@@ -290,6 +296,27 @@ _MSG_CAPTCHA = ("ROBÔ: digite o código de segurança (5 letras) e clique em En
                 "Depois disso o robô continua sozinho.")
 _MSG_CAPTCHA_ERRADO = ("ROBÔ: o código anterior estava incorreto ou expirado. "
                        "Digite o novo código (5 letras) e clique em Entrar.")
+
+
+def apitar():
+    """Toca o alerta sonoro. Nunca propaga erro: som nao pode derrubar o robo.
+
+    Usa ctypes, e nao winsound, de proposito: o winsound nao esta dentro dos .exe
+    ja instalados, e o ctypes esta. As APIs do Windows chamadas aqui sao as mesmas
+    que o winsound usa.
+    """
+    try:
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        for _ in range(3):
+            # Beep devolve 0 em maquina sem dispositivo de saida configurado.
+            if not kernel32.Beep(1200, 250):
+                if not ctypes.windll.user32.MessageBeep(_SOM_RESERVA):
+                    raise OSError("Beep e MessageBeep devolveram 0")
+                return
+            time.sleep(0.1)
+    except Exception as e:
+        logging.warning(f"Nao foi possivel tocar o apito: {e}")
 
 
 def _preencher_login_captcha(navegador, usuario, senha, aviso):
@@ -324,9 +351,11 @@ def entrar_no_sisweb(navegador, usuario, senha):
         return
 
     logging.info("SISWEB pediu captcha - aguardando o usuario digitar e entrar")
+    apitar()
     aviso = _MSG_CAPTCHA
     seguidos_fora = 0
     limite = time.time() + LOGIN_CAPTCHA_TIMEOUT
+    proximo_apito = time.time() + LOGIN_CAPTCHA_APITO
     while time.time() < limite:
         try:
             if _fora_da_tela_de_login(navegador):
@@ -353,6 +382,9 @@ def entrar_no_sisweb(navegador, usuario, senha):
             raise
         except WebDriverException:
             seguidos_fora = 0  # pagina trocando no meio da leitura
+        if time.time() >= proximo_apito:
+            proximo_apito = time.time() + LOGIN_CAPTCHA_APITO
+            apitar()
         time.sleep(1)
 
     logging.error("Tempo esgotado esperando o captcha do SISWEB")
