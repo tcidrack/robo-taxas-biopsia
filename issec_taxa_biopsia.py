@@ -155,6 +155,27 @@ _SECRETS = _carregar_secrets()
 SUPABASE_URL = getattr(_SECRETS, "SUPABASE_URL", "") or "https://azjkpuulzmtyubosolck.supabase.co/rest/v1/execucoes_taxas_biopsia"
 SUPABASE_APIKEY = getattr(_SECRETS, "SUPABASE_APIKEY", "") or "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF6amtwdXVsem10eXVib3NvbGNrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5NTE2MTksImV4cCI6MjA5MDUyNzYxOX0.vGis0gxHcuvXX6PGYaW72WnObF9sgaYRI3UejiUAc3g"
 
+def _ler_robo_token():
+    """Token dos robos (cabecalho x-robo-token). Sem ele o RLS do Supabase recusa
+    a gravacao. Vem do config.ini ao lado do .exe, secao [supabase], chave
+    robo_token. A variavel de ambiente SUPABASE_ROBO_TOKEN sobrescreve (dev)."""
+    import configparser
+    token = os.environ.get("SUPABASE_ROBO_TOKEN", "").strip()
+    if token:
+        return token
+    cfg = configparser.ConfigParser()
+    try:
+        cfg.read(os.path.join(os.getcwd(), "config.ini"), encoding="utf-8")
+        return cfg.get("supabase", "robo_token", fallback="").strip()
+    except Exception:
+        return ""
+
+
+# Token embutido: chega nas maquinas pelo auto-update (sem trocar config.ini).
+# config.ini [supabase] robo_token ou SUPABASE_ROBO_TOKEN sobrescrevem.
+_ROBO_TOKEN_PADRAO = "YZRcbsUk6JHEajqSzfxV11cO0b2Z-uRrDXbD4TAVuf8"
+ROBO_TOKEN = _ler_robo_token() or _ROBO_TOKEN_PADRAO
+
 options = Options()
 options.add_argument("--start-maximized")
 
@@ -1067,7 +1088,8 @@ def registrar_supabase(numero_processo, qtd_guias, qtd_taxas, qtd_guias_taxadas,
     }
     headers = {
         "apikey": SUPABASE_APIKEY,
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        **({"x-robo-token": ROBO_TOKEN} if ROBO_TOKEN else {}),
     }
     try:
         r = requests.post(SUPABASE_URL, json=payload, headers=headers, timeout=30)

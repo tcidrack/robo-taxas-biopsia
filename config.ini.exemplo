@@ -7,3 +7,7 @@
 ; restrito apenas ao repositorio tcidrack/robo-taxas-biopsia, validade longa.
 ; Ao expirar, basta atualizar este token (sem rebuildar o .exe).
 token = COLE_AQUI_O_TOKEN_FINE_GRAINED
+
+[supabase]
+; Token dos robos (cabecalho x-robo-token). Sem ele o Supabase recusa a gravacao.
+robo_token = COLE_AQUI_O_TOKEN_DOS_ROBOS
